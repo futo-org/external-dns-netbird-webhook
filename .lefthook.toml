@@ -1,0 +1,59 @@
+[pre-commit]
+parallel = true
+skip = ["merge", "rebase"]
+
+[pre-commit.commands.format-go]
+glob = ["*.go"]
+run = "gofmt -s -w {staged_files}"
+stage_fixed = true
+
+# mise fmt rewrites the configuration file on each run. If mise lock reads the
+# file during the rewrite, it removes every tool from the lockfile. As a
+# result, these two jobs run one after the other, and the rest of pre-commit
+# runs in parallel.
+[[pre-commit.jobs]]
+name = "mise"
+glob = [".mise/config.toml", ".mise/conf.d/*.toml"]
+
+[pre-commit.jobs.group]
+piped = true
+
+[[pre-commit.jobs.group.jobs]]
+name = "format-mise"
+run = "mise fmt"
+stage_fixed = true
+
+[[pre-commit.jobs.group.jobs]]
+name = "lock-mise"
+run = 'mise lock && git add -A -- .mise ":(exclude).mise/*.toml"'
+
+# oxfmt drops the staged paths that .prettierignore covers. If no paths are
+# left to format, oxfmt exits with an error. --no-error-on-unmatched-pattern
+# prevents this error, so that a commit of only ignored files does not fail.
+[pre-commit.commands.format-json]
+glob = ["*.json", "*.json5", "*.jsonc"]
+# mise.lock pins the lock sidecars of mise by digest. If oxfmt formats them,
+# `mise install --locked` fails with a digest mismatch.
+exclude = [".mise/locks/**"]
+run = "oxfmt --no-error-on-unmatched-pattern {staged_files}"
+stage_fixed = true
+
+[pre-commit.commands.format-markdown]
+glob = ["*.md"]
+run = "oxfmt --no-error-on-unmatched-pattern {staged_files}"
+stage_fixed = true
+
+[pre-commit.commands.format-yaml]
+glob = ["*.yaml", "*.yml"]
+exclude = [".mise/locks/**"]
+run = "oxfmt --no-error-on-unmatched-pattern {staged_files}"
+stage_fixed = true
+
+# actionlint does not know the ubuntu-26.04 runner label yet.
+[pre-commit.commands.actionlint]
+glob = [".github/workflows/*.yaml"]
+run = '''actionlint -shellcheck= -ignore 'label "ubuntu-26\.04(-arm)?" is unknown' {staged_files}'''
+
+[pre-commit.commands.zizmor]
+glob = [".github/workflows/*.yaml"]
+run = "zizmor --offline {staged_files}"
