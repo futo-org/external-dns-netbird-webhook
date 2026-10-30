@@ -159,14 +159,54 @@ func TestAdjustEndpoints(t *testing.T) {
 }
 
 func TestBodyTooLarge(t *testing.T) {
-	h := New(&fakeProvider{})
-	req := httptest.NewRequest(http.MethodPost, "/records", strings.NewReader(`{"create":[]}`))
-	req.Header.Set("Content-Type", mediaType)
-	rec := httptest.NewRecorder()
-	req.Body = http.MaxBytesReader(rec, req.Body, 4)
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"in the value", `{"create":[]}`},
+		{"after the value", `{}               `},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &fakeProvider{}
+			h := New(p)
+			req := httptest.NewRequest(http.MethodPost, "/records", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", mediaType)
+			rec := httptest.NewRecorder()
+			req.Body = http.MaxBytesReader(rec, req.Body, 4)
 
-	h.ApplyChanges(rec, req)
-	if rec.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("status = %d, want 413", rec.Code)
+			h.ApplyChanges(rec, req)
+			if rec.Code != http.StatusRequestEntityTooLarge || p.applied != nil {
+				t.Errorf("status = %d, applied = %v, want 413 and no apply", rec.Code, p.applied)
+			}
+		})
+	}
+}
+
+func TestTrailingData(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"second value", `{"create":[]}{"delete":[]}`},
+		{"garbage", `{"create":[]} x`},
+		{"closing bracket", `{"create":[]}]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &fakeProvider{}
+			h := New(p)
+
+			rec := serve(t, h.ApplyChanges, http.MethodPost, tt.body, map[string]string{"Content-Type": mediaType})
+			if rec.Code != http.StatusBadRequest || p.applied != nil {
+				t.Errorf("status = %d, applied = %v, want 400 and no apply", rec.Code, p.applied)
+			}
+		})
+	}
+
+	p := &fakeProvider{}
+	rec := serve(t, New(p).ApplyChanges, http.MethodPost, "{\"create\":[]}\n", map[string]string{"Content-Type": mediaType})
+	if rec.Code != http.StatusNoContent || p.applied == nil {
+		t.Errorf("status with a trailing newline = %d, applied = %v, want 204 and an apply", rec.Code, p.applied)
 	}
 }

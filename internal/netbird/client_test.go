@@ -1,6 +1,7 @@
 package netbird
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -205,14 +206,40 @@ func TestListZonesRejectsOversizedResponse(t *testing.T) {
 	maxResponseBytes = 16
 	t.Cleanup(func() { maxResponseBytes = old })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		netbirdtest.WriteJSON(w, []api.Zone{{Id: "a-long-zone-id", Domain: "example.com"}})
-	}))
-	t.Cleanup(srv.Close)
+	tests := []struct {
+		name  string
+		stall bool
+	}{
+		{"complete body", false},
+		{"body that stalls after the limit", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			release := make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				netbirdtest.WriteJSON(w, []api.Zone{{Id: "a-long-zone-id", Domain: "example.com"}})
+				if tt.stall {
+					if err := http.NewResponseController(w).Flush(); err != nil {
+						t.Errorf("flush: %v", err)
+					}
+					<-release
+				}
+			}))
+			t.Cleanup(srv.Close)
+			t.Cleanup(func() { close(release) })
 
-	_, err := newClient(testConfig(srv.URL)).listZones(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "exceeds 16 bytes") {
-		t.Fatalf("err = %v, want size limit error", err)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			start := time.Now()
+			_, err := newClient(testConfig(srv.URL)).listZones(ctx)
+			if err == nil || !strings.Contains(err.Error(), "exceeds 16 bytes") {
+				t.Fatalf("err = %v, want size limit error", err)
+			}
+			if elapsed := time.Since(start); elapsed > time.Second {
+				t.Errorf("listZones took %s, want the size error without waiting for the rest of the body", elapsed)
+			}
+		})
 	}
 }
 
@@ -340,6 +367,63 @@ func TestErrorResponses(t *testing.T) {
 			}
 			if !stub.closed.Load() {
 				t.Error("error response body was not closed")
+			}
+		})
+	}
+}
+
+func TestRetriesStalledBodyRead(t *testing.T) {
+	tests := []struct {
+		name     string
+		call     func(*client) error
+		wantErr  bool
+		wantHits int32
+	}{
+		{
+			name:     "GET retries a body that stalls past the attempt timeout",
+			call:     func(c *client) error { _, err := c.listZones(t.Context()); return err },
+			wantHits: 2,
+		},
+		{
+			name:     "POST does not retry, because the create can have landed",
+			call:     func(c *client) error { return c.createRecord(t.Context(), "z", api.DNSRecord{}) },
+			wantErr:  true,
+			wantHits: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if hits.Add(1) == 1 {
+					w.WriteHeader(http.StatusOK)
+					if err := http.NewResponseController(w).Flush(); err != nil {
+						t.Errorf("flushing headers: %v", err)
+					}
+					select {
+					case <-r.Context().Done():
+					case <-time.After(time.Second):
+					}
+
+					return
+				}
+				if r.Method == http.MethodGet {
+					netbirdtest.WriteJSON(w, []api.Zone{})
+
+					return
+				}
+				netbirdtest.WriteJSON(w, api.DNSRecord{})
+			}))
+			t.Cleanup(srv.Close)
+			cfg := testConfig(srv.URL)
+			cfg.RequestTimeout = 100 * time.Millisecond
+
+			err := tt.call(newClient(cfg))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got := hits.Load(); got != tt.wantHits {
+				t.Errorf("hits = %d, want %d", got, tt.wantHits)
 			}
 		})
 	}

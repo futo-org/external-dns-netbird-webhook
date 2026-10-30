@@ -525,6 +525,13 @@ func TestPlanConverges(t *testing.T) {
 			changing: true,
 		},
 		{
+			name:     "two spellings of one IPv6 target create one record",
+			zone:     api.Zone{Id: "z1", Domain: "example.com"},
+			desired:  []*endpoint.Endpoint{endpoint.NewEndpoint("www.example.com", "AAAA", "2001:db8::1", "2001:db8:0::1")},
+			want:     []string{"z1 www.example.com AAAA 2001:db8::1 300"},
+			changing: true,
+		},
+		{
 			name: "differently spelled IPv6 does not hide another target change",
 			zone: api.Zone{Id: "z1", Domain: "example.com", Records: []api.DNSRecord{
 				{Id: "a", Name: "www.example.com", Type: "AAAA", Content: "2001:db8:0::1", Ttl: 300},

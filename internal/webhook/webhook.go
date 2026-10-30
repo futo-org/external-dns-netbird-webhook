@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -130,11 +131,16 @@ func checkMediaType(w http.ResponseWriter, r *http.Request, header string) bool 
 	return false
 }
 
-// decodeBody decodes the JSON request body into T. If the body is over the
-// limit, it writes 413. For any other decode failure, it writes 400.
+// decodeBody decodes the JSON request body into T. The body must hold one
+// JSON value and nothing after it. If the body is over the limit, it writes
+// 413. For any other decode failure, it writes 400.
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	var v T
-	err := json.NewDecoder(r.Body).Decode(&v)
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(&v)
+	if err == nil {
+		err = expectEOF(dec)
+	}
 	if err == nil {
 		return v, true
 	}
@@ -149,6 +155,19 @@ func decodeBody[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	writePlain(w, r, http.StatusBadRequest, fmt.Sprintf("error decoding request body: %v", err))
 
 	return v, false
+}
+
+// expectEOF returns an error unless dec has read all of its input.
+func expectEOF(dec *json.Decoder) error {
+	_, err := dec.Token()
+	switch {
+	case errors.Is(err, io.EOF):
+		return nil
+	case err == nil:
+		return errors.New("unexpected data after the JSON value")
+	}
+
+	return err
 }
 
 // writeJSON encodes v with the webhook media type. If the encode fails,

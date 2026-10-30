@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/futo-org/external-dns-netbird-webhook/internal/config"
+	"github.com/futo-org/external-dns-netbird-webhook/internal/metrics"
 	"github.com/futo-org/external-dns-netbird-webhook/internal/webhook"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/external-dns/endpoint"
 	"sigs.k8s.io/external-dns/plan"
 )
@@ -121,6 +123,44 @@ func TestMainHandler(t *testing.T) {
 			_ = resp.Body.Close()
 			if resp.StatusCode != tt.want {
 				t.Errorf("status = %d, want %d", resp.StatusCode, tt.want)
+			}
+		})
+	}
+}
+
+func TestMainHandlerMetrics(t *testing.T) {
+	cfg := &config.Config{ServerMaxBodyBytes: 16}
+	readyz := readyzHandler(newCachedProbe(func(context.Context) error { return nil }, time.Hour))
+	srv := httptest.NewServer(mainHandler(cfg, webhook.New(panicProvider{}), readyz))
+	t.Cleanup(srv.Close)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		labels []string
+	}{
+		{"panic counts as 500", http.MethodGet, "/records", []string{http.MethodGet, "/records", "500"}},
+		{"unknown method", "FOO", "/records", []string{"other", "other", "405"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			counter := metrics.Get().HTTPRequestsTotal.WithLabelValues(append([]string{metrics.ProviderName}, tt.labels...)...)
+			before := testutil.ToFloat64(counter)
+
+			req, err := http.NewRequestWithContext(t.Context(), tt.method, srv.URL+tt.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Accept", "application/external.dns.webhook+json;version=1")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = resp.Body.Close()
+
+			if got := testutil.ToFloat64(counter) - before; got != 1 {
+				t.Errorf("requests counted with labels %v = %v, want 1", tt.labels, got)
 			}
 		})
 	}

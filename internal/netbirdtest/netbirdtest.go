@@ -5,6 +5,7 @@ package netbirdtest
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/netbirdio/netbird/shared/management/domain"
 	"github.com/netbirdio/netbird/shared/management/http/api"
 )
 
@@ -238,14 +240,11 @@ func recordIndex(z *api.Zone, id string) int {
 	return slices.IndexFunc(z.Records, func(r api.DNSRecord) bool { return r.Id == id })
 }
 
-// validate mirrors the management server's record validation and
-// validateRecordConflicts.
+// validate mirrors Record.Validate and validateRecordConflicts in the
+// management server.
 func validate(z *api.Zone, rec api.DNSRecord) (int, string) {
-	if strings.HasSuffix(rec.Name, ".") {
-		return http.StatusUnprocessableEntity, "invalid record name format"
-	}
-	if rec.Type == api.DNSRecordTypeCNAME && strings.HasSuffix(rec.Content, ".") {
-		return http.StatusUnprocessableEntity, "invalid CNAME target format"
+	if msg := validateRecord(rec); msg != "" {
+		return http.StatusUnprocessableEntity, msg
 	}
 	if rec.Name != z.Domain && !strings.HasSuffix(rec.Name, "."+z.Domain) {
 		return http.StatusUnprocessableEntity, "record name does not belong to zone"
@@ -263,6 +262,41 @@ func validate(z *api.Zone, rec api.DNSRecord) (int, string) {
 	}
 
 	return 0, ""
+}
+
+// validateRecord mirrors Record.Validate in the management server, which
+// validates a record before its zone. It returns the error message, or "" for a
+// valid record.
+func validateRecord(rec api.DNSRecord) string {
+	switch {
+	case rec.Name == "":
+		return "record name is required"
+	case !domain.IsValidDomain(rec.Name):
+		return "invalid record name format"
+	}
+
+	switch ip := net.ParseIP(rec.Content); rec.Type {
+	case api.DNSRecordTypeA:
+		if ip == nil || ip.To4() == nil {
+			return "A record must be a valid IPv4 address"
+		}
+	case api.DNSRecordTypeAAAA:
+		if ip == nil || ip.To4() != nil {
+			return "AAAA record must be a valid IPv6 address"
+		}
+	case api.DNSRecordTypeCNAME:
+		if !domain.IsValidDomainNoWildcard(rec.Content) {
+			return "invalid CNAME target format"
+		}
+	default:
+		return "invalid record type, must be A, AAAA, or CNAME"
+	}
+
+	if rec.Ttl < 0 {
+		return "TTL cannot be negative"
+	}
+
+	return ""
 }
 
 // WriteJSON writes v as a 200 JSON response.

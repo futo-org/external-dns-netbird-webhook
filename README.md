@@ -155,7 +155,7 @@ ExternalDNS gives each webhook call a fixed time limit: `--webhook-provider-read
 
 `NETBIRD_APPLY_TIMEOUT` limits the time to apply one batch of changes. The limit covers the zone lookup and every create, update, and delete. If the time runs out, the webhook answers `500`. The writes that finished stay, and the next sync applies the rest. Keep `NETBIRD_APPLY_TIMEOUT` below the ExternalDNS time limit. If large batches against a slow management server time out again and again, increase both values together.
 
-To read the records, the webhook sends one request. To limit this request, set `NETBIRD_REQUEST_TIMEOUT`. Make sure that `NETBIRD_RETRY_ATTEMPTS × NETBIRD_REQUEST_TIMEOUT`, plus the backoff between attempts, stays below the ExternalDNS time limit. With the default values, `4s` gives a worst case of about 14.3s. If you increase the ExternalDNS timeouts instead, keep their sum below `SERVER_WRITE_TIMEOUT`.
+To read the records, the webhook sends one request. To limit this request, set `NETBIRD_REQUEST_TIMEOUT`. Make sure that `NETBIRD_RETRY_ATTEMPTS × NETBIRD_REQUEST_TIMEOUT`, plus the backoff between attempts, stays below the ExternalDNS time limit. With the default values, `4s` gives a worst case of about 14.3s. But a `Retry-After` header can make each wait between attempts as long as `NETBIRD_RETRY_MAX_DELAY`. Then the worst case is `NETBIRD_RETRY_ATTEMPTS × NETBIRD_REQUEST_TIMEOUT + (NETBIRD_RETRY_ATTEMPTS - 1) × NETBIRD_RETRY_MAX_DELAY`, which is 32s with the default values and `4s`. To stay below the time limit, decrease `NETBIRD_RETRY_MAX_DELAY` (`1s` gives 14s) or increase the ExternalDNS timeouts. If you increase the ExternalDNS timeouts, keep their sum below `SERVER_WRITE_TIMEOUT`.
 
 ### Webhook server
 
@@ -187,7 +187,7 @@ To read the records, the webhook sends one request. To limit this request, set `
 | `/metrics`         | `8080`         | Prometheus metrics.                                                       |
 | `/debug/pprof/`    | `8080`         | Go pprof endpoints. Requires `PPROF_ENABLED=true`.                        |
 
-Both ports serve `/healthz` and `/readyz`. The chart exposes only one container port for the webhook, so the Kubernetes probes must use it.
+Both ports serve `/healthz` and `/readyz`. The ExternalDNS Helm chart gives the webhook container one port, `8080`, with the name `http-webhook`. The chart sends the Kubernetes probes and the ServiceMonitor to this port, which is the health server. The chart values cannot change this container port, so keep `HEALTH_SERVER_ADDR` on port `8080`.
 
 ## Development
 

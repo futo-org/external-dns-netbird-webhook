@@ -36,6 +36,8 @@ const errorBodyLimit = 512
 // is a variable so that tests can make it smaller.
 var maxResponseBytes int64 = 25 << 20
 
+var errResponseTooLarge = errors.New("response too large")
+
 // client calls the DNS zone endpoints through the NetBird REST SDK, which
 // sends every request through a retryingClient.
 type client struct {
@@ -168,15 +170,19 @@ func (c *retryingClient) Do(req *http.Request) (*http.Response, error) {
 		if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 			m.APIRateLimitsTotal.WithLabelValues(metrics.ProviderName, op).Inc()
 		}
+		// The SDK reads the body after Do returns, outside the retries. Read it
+		// in the attempt, so that a failed or stalled read retries like a failed
+		// request. A body over the limit does not change on a retry.
+		if err == nil && resp.StatusCode < http.StatusMultipleChoices {
+			if resp, err = bufferBody(resp, op); errors.Is(err, errResponseTooLarge) {
+				return nil, err
+			}
+		}
 
 		retry, wait := c.shouldRetry(req.Method, resp, err, attempt)
 		if !retry || attempt == c.attempts-1 || ctx.Err() != nil {
-			switch {
-			case resp == nil:
-			case resp.StatusCode >= http.StatusMultipleChoices:
+			if resp != nil && resp.StatusCode >= http.StatusMultipleChoices {
 				resp = errorResponse(resp)
-			default:
-				resp.Body = &limitedBody{ReadCloser: resp.Body, op: op}
 			}
 
 			return resp, err
@@ -270,33 +276,26 @@ func errorResponse(resp *http.Response) *http.Response {
 	return resp
 }
 
-// limitedBody fails a read after maxResponseBytes, because the SDK reads
-// response bodies without a limit. When the SDK closes the body, limitedBody
-// records the size of the response.
-type limitedBody struct {
-	io.ReadCloser
-
-	op   string
-	read int64
-}
-
-func (b *limitedBody) Read(p []byte) (int, error) {
-	// Allow one byte past the limit so a body of exactly the limit still reads.
-	if remaining := maxResponseBytes - b.read + 1; int64(len(p)) > remaining {
-		p = p[:max(remaining, 0)]
+// bufferBody reads the body of a successful response into memory, up to
+// maxResponseBytes, and records its size. The SDK reads response bodies
+// without a limit.
+func bufferBody(resp *http.Response, op string) (*http.Response, error) {
+	// One byte past the limit tells a body of exactly the limit from a larger one.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	// A body within the limit is already read to the end, so the connection
+	// can be used again. To drain the rest of a larger body only delays the
+	// error.
+	_ = resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+	if int64(len(body)) > maxResponseBytes {
+		return nil, fmt.Errorf("%w: it exceeds %d bytes", errResponseTooLarge, maxResponseBytes)
 	}
 
-	n, err := b.ReadCloser.Read(p)
-	b.read += int64(n)
-	if b.read > maxResponseBytes {
-		return n, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
-	}
+	metrics.Get().APIResponseSizeBytes.WithLabelValues(metrics.ProviderName, op).Observe(float64(len(body)))
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
 
-	return n, err
-}
-
-func (b *limitedBody) Close() error {
-	metrics.Get().APIResponseSizeBytes.WithLabelValues(metrics.ProviderName, b.op).Observe(float64(b.read))
-
-	return b.ReadCloser.Close()
+	return resp, nil
 }

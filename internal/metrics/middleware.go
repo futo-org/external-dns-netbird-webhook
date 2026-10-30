@@ -21,6 +21,19 @@ func RouteLabel(r *http.Request) string {
 	return "other"
 }
 
+// methodLabel turns a request method into a metric label from a fixed set.
+// net/http accepts any token as a method. Without this, each new method from a
+// client adds a label value.
+func methodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace:
+		return method
+	}
+
+	return "other"
+}
+
 // HTTPMetricsMiddleware records request count, duration, in-flight count and
 // response size for every wrapped HTTP handler.
 func HTTPMetricsMiddleware(next http.Handler) http.Handler {
@@ -35,6 +48,6 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		m.RecordHTTPRequest(r.Method, RouteLabel(r), rec.Status(), time.Since(start), rec.Written())
+		m.RecordHTTPRequest(methodLabel(r.Method), RouteLabel(r), rec.Status(), time.Since(start), rec.Written())
 	})
 }

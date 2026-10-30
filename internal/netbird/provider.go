@@ -208,9 +208,16 @@ func (p *Provider) AdjustEndpoints(endpoints []*endpoint.Endpoint) ([]*endpoint.
 			ep.ProviderSpecific = nil
 		}
 
-		for i, target := range ep.Targets {
-			ep.Targets[i] = canonicalTarget(target)
+		// Two spellings of one target become one target. NetBird stores the
+		// target once, and external-dns compares the number of targets.
+		targets := make(endpoint.Targets, 0, len(ep.Targets))
+		for _, target := range ep.Targets {
+			target = canonicalTarget(target)
+			if !slices.ContainsFunc(targets, func(t string) bool { return sameContent(t, target) }) {
+				targets = append(targets, target)
+			}
 		}
+		ep.Targets = targets
 
 		if ep.RecordType == endpoint.RecordTypeCNAME && len(ep.Targets) > 1 {
 			metrics.Get().IgnoredCNAMETargetsTotal.WithLabelValues(metrics.ProviderName).Inc()

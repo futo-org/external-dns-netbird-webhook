@@ -43,13 +43,9 @@ func mainHandler(cfg *config.Config, whk *webhook.Webhook, readyz http.HandlerFu
 	mux.HandleFunc("GET /records", whk.Records)
 	mux.HandleFunc("POST /records", whk.ApplyChanges)
 	mux.HandleFunc("POST /adjustendpoints", whk.AdjustEndpoints)
-	// The external-dns chart exposes one port for the webhook sidecar, so the
-	// probes must also be on this port.
 	mountHealth(mux, readyz)
 
-	// Recovery is the outermost layer, so that it catches panics from every
-	// layer.
-	return recoveryAndAccessLog(metrics.HTTPMetricsMiddleware(limitBody(cfg.ServerMaxBodyBytes, mux)))
+	return accessLog(metrics.HTTPMetricsMiddleware(recovery(limitBody(cfg.ServerMaxBodyBytes, mux))))
 }
 
 func healthHandler(cfg *config.Config, readyz http.HandlerFunc) http.Handler {
@@ -66,7 +62,7 @@ func healthHandler(cfg *config.Config, readyz http.HandlerFunc) http.Handler {
 		mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 	}
 
-	return recoveryAndAccessLog(mux)
+	return accessLog(recovery(mux))
 }
 
 func mountHealth(mux *http.ServeMux, readyz http.HandlerFunc) {
