@@ -4,10 +4,11 @@ This project is a webhook provider for [ExternalDNS](https://github.com/kubernet
 
 ## Requirements
 
-| Component   | Version                                         |
-| ----------- | ----------------------------------------------- |
-| NetBird     | v0.63.0 or later (first release with DNS zones) |
-| ExternalDNS | v0.24.0 (tested)                                |
+| Component         | Version                                                           |
+| ----------------- | ----------------------------------------------------------------- |
+| NetBird           | v0.63.0 or later (first release with DNS zones)                   |
+| ExternalDNS       | v0.24.0 (tested)                                                  |
+| Container runtime | Support for zstd image layers, such as containerd v1.5.0 or later |
 
 The provider works with NetBird Cloud and with self-hosted management servers.
 
@@ -199,3 +200,7 @@ mise run test
 mise run test-e2e
 mise run lint
 ```
+
+## License
+
+This project uses the [Source First License 1.1](LICENSE).
