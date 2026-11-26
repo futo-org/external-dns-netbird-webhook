@@ -2,9 +2,9 @@
 go = "1.27.4"
 "go:golang.org/x/vuln/cmd/govulncheck" = "v1.10.0"
 golangci-lint = "2.15.0"
-lefthook = "2.2.2"
+lefthook = "2.2.4"
 oxfmt = "0.73.0"
-zizmor = "1.32.0"
+zizmor = "1.33.1"
 
 [tasks.fmt]
 description = "Run go fmt against code"
