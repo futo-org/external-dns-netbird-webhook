@@ -8,6 +8,7 @@ on:
       - main
     paths-ignore:
       - "**.md"
+      - .release-please-manifest.json
   release:
     types:
       - published
