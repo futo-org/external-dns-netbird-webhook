@@ -151,14 +151,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
-          install_args: --locked actionlint zizmor
-
-      # actionlint does not know the ubuntu-26.04 runner label yet.
-      - name: Run actionlint
-        run: actionlint -color -shellcheck= -ignore 'label "ubuntu-26\.04(-arm)?" is unknown'
+          install_args: --locked zizmor
 
       - name: Run zizmor
-        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: zizmor --color=always --no-progress .

@@ -146,10 +146,10 @@ see what's defined; currently `test`, `test-e2e`, `lint`, `lint-fix`, `vet`,
 
 `lefthook` (`.lefthook.toml`) runs pre-commit: `gofmt -s` on Go files,
 `mise fmt` and `mise lock` when the mise config changes, `oxfmt` on JSON,
-Markdown, and YAML, and `actionlint` and `zizmor` on workflows. CI
+Markdown, and YAML, and `zizmor` on workflows. CI
 (`.github/workflows/ci.yaml`) runs golangci-lint (including the `e2e` build
 tag), the tests plus a `go mod tidy` diff check, the end-to-end tests on pull
-requests, govulncheck, and the workflow linters. Lint rules live in
+requests, govulncheck, and `zizmor`. Lint rules live in
 `.golangci.yml`; read it instead of trusting a restated list.
 
 ## Containers

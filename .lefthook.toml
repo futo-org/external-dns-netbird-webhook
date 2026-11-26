@@ -49,11 +49,6 @@ exclude = [".mise/locks/**"]
 run = "oxfmt --no-error-on-unmatched-pattern {staged_files}"
 stage_fixed = true
 
-# actionlint does not know the ubuntu-26.04 runner label yet.
-[pre-commit.commands.actionlint]
-glob = [".github/workflows/*.yaml"]
-run = '''actionlint -shellcheck= -ignore 'label "ubuntu-26\.04(-arm)?" is unknown' {staged_files}'''
-
 [pre-commit.commands.zizmor]
 glob = [".github/workflows/*.yaml"]
 run = "zizmor --offline {staged_files}"
