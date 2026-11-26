@@ -7,7 +7,7 @@ This project is a webhook provider for [ExternalDNS](https://github.com/kubernet
 | Component   | Version                                         |
 | ----------- | ----------------------------------------------- |
 | NetBird     | v0.63.0 or later (first release with DNS zones) |
-| ExternalDNS | v0.23.0 (tested)                                |
+| ExternalDNS | v0.24.0 (tested)                                |
 
 The provider works with NetBird Cloud and with self-hosted management servers.
 

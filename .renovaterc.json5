@@ -2,4 +2,11 @@
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["github>immich-app/.github:renovate-config"],
   postUpdateOptions: ["gomodTidy", "gomodUpdateImportPaths"],
+  packageRules: [
+    {
+      description: "nonroot is a rolling tag: a pinned digest gets an update PR for each rebuild",
+      matchPackageNames: ["gcr.io/distroless/static"],
+      pinDigests: false,
+    },
+  ],
 }

@@ -112,8 +112,7 @@ func startServer(t *testing.T, nb *netbirdtest.Server, env ...string) server {
 			}
 		case <-time.After(10 * time.Second):
 			_ = cmd.Process.Kill()
-			<-exited
-			t.Error("webhook did not exit within 10s of SIGTERM")
+			t.Errorf("webhook did not exit within 10s of SIGTERM: %v", <-exited)
 		}
 		if t.Failed() {
 			t.Logf("webhook output:\n%s", output.String())

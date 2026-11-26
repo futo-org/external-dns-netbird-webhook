@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           experimental: true
           install_args: --locked
@@ -63,7 +63,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           experimental: true
           install_args: --locked
@@ -98,7 +98,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           experimental: true
           install_args: --locked
@@ -126,7 +126,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           experimental: true
           install_args: --locked
@@ -149,16 +149,11 @@ jobs:
           persist-credentials: false
 
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
-          install_args: --locked actionlint zizmor
-
-      # actionlint does not know the ubuntu-26.04 runner label yet.
-      - name: Run actionlint
-        run: actionlint -color -shellcheck= -ignore 'label "ubuntu-26\.04(-arm)?" is unknown'
+          install_args: --locked zizmor
 
       - name: Run zizmor
-        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: zizmor --color=always --no-progress .
