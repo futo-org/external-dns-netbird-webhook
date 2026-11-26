@@ -55,6 +55,8 @@ jobs:
         VERSION=${{ github.ref_name }}
         REVISION=${{ github.sha }}
         GO_VERSION=${{ needs.versions.outputs.go-version }}
+      compression: zstd
+      force-compression: true
       meta-images: ghcr.io/${{ github.repository }}
       meta-tags: |
         type=semver,pattern={{version}}
