@@ -12,5 +12,6 @@ RUN CGO_ENABLED=0 go build \
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /out/external-dns-netbird-webhook /external-dns-netbird-webhook
+COPY LICENSE /LICENSE
 EXPOSE 8888/tcp
 ENTRYPOINT ["/external-dns-netbird-webhook"]
